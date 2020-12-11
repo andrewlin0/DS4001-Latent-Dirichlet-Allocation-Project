@@ -1,0 +1,517 @@
+---
+title: "Final Data Science Project"
+author: "Andrew Lin, Ryan Biswas, Ellen Wray"
+date: "12/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+#install.packages("tidytext")
+#install.packages("tidyverse")
+#install.packages("textreadr")
+#install.packages("readtext")
+#install.packages("ggplot2")
+#install.packages("dplyr")
+#install.packages("plotly")
+#install.packages("gridExtra")
+#install.packages("knitr")
+#install.packages("gt")
+#install.packages("stringr")
+#install.packages("textdata")
+#install.packages("wordcloud")
+#install.packages("topicmodels")
+#install.packages("textmineR")
+#install.packages("tm")
+#install.packages("reshape2")
+#install.packages("gridExtra")
+library("textreadr")
+library("tidytext")
+library("readtext")
+library("tidyverse")
+library("ggplot2")
+library("dplyr")
+library("plotly")
+library("knitr")
+library("gt")
+library("textmineR")
+library("forcats")
+```
+
+![](cover.jpg)
+
+# Introduction
+
+The most read book of all time is the Bible. There are few books are universally known and read, especially continuously over centuries, but the Bible is one of them. As a hallmark of the Christian faith, the Bible serves as the main source of Christian theology. It also provides significant context for other fields, such as history and literature. Overall, the Bible is one of the most influential pieces of texts ever written.
+
+Because of its influence, we have chosen to conduct our text analysis on the Bible (American Standard Version). As one of the most influential and well-read books through all of history, we think it will be interesting to conduct different text analysis techniques. The Bible has been studied a thousand different ways, but looking at it through a textual lens for the sake of data science should prove interesting. 
+
+From this analysis, we seek to gleam the key pillars of Christian faith. What words will be the most commonly used - perhaps an emphasis on Jesus, God, and faith? Will topic modeling detect specific stories of the Old Testament, like Moses parting the Red Sea or Jonah being eaten by the whale? What are the differences between the Old Testament and the New Testament? We will be attempting to answer all these questions through our research.
+
+Before beginning the project, we did a little bit of research on text mining the Bible on Google. We found [this](https://emelineliu.com/2016/01/10/bible1/) research project that echos our ideas. However, we didn't find their results that conclusionary. They only used 5 topics in their analysis - which seems far too few to catch the entireity of the Bible, which has over 30,000 lines. This resource does prove a helpful check though for our beginning exploratory data process of cleaning and looking for the most used words.
+
+
+# Data Cleaning
+
+We downloaded this Bible data set from Kaggle. While there are many different versions of the Bible to choose from - because there are so many different translations - we chose the ASV Bible because it has a more modern, updated vocabulary that will fit better with the modern lexicons we will be using. This data set had 5 columns:
+
+- id: the unique identifier for each row
+- b: the book the verse came from
+- c: the chapter the verse came from
+- v: the number of the verse
+- t: the text of the verse
+
+Here is the head of the original data set from Kaggle.
+```{r, warning= FALSE, message = FALSE, error = FALSE}
+bible_data <- read.csv("t_asv.csv")
+
+head(bible_data)
+```
+We did our data cleaning in Python using the pandas package. 
+
+![Upload data and put each book on its own row](ss1.png)
+![Data frame of each book on its own row](ss2.png)
+![Uploading the packages needed for cleaning](ss3.png)
+![Cleaned the data - took out the stop words, cleaned punctuation](ss4.png)
+![Turned into a data frame](ss5.png)
+
+This is the cleaned data set, imported back into R Studio.
+```{r, warning= FALSE, message = FALSE, error = FALSE}
+cleaned_bible_data <- read.csv("cleaned_books.csv")
+```
+
+# Exploratory Data Analysis
+
+To begin our data analysis, we want to see the structure of the data we are working with.
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+str(bible_data)
+```
+
+All our identifying columns, id, book, chapter, and verse, are integers. Our text column, t, is a character. Let's do a quick analysis of our identifying columns.
+
+Below, we have created a data table. This data table gives a quick overview of the Bible, Old Testament, and New Testament. It shows the amount of books, chapters, and verses in each one.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+old_test <- bible_data[bible_data$b <= 39,]
+new_test <- bible_data[bible_data$b > 40,]
+
+data_df <- data.frame("Count" = c("Books", "Chapters", "Verses"), "Bible" = c(length(unique(bible_data$b)), length(unique(bible_data$c)), length(unique(bible_data$t))),"Old Test" = c(length(unique(old_test$b)), length(unique(old_test$c)), length(unique(old_test$t))),"New Testament" = c(length(unique(new_test$b)), length(unique(new_test$c)), length(unique(new_test$t))))
+
+gt(data_df)
+```
+
+There isn't much to conclude here except that the Bible is very long - which gives us a lot of text to work with. We also see that the Old Testament is longer than the New Testament. 
+
+# N-Grams
+
+Next, we want to conduct exploratory analysis on the text itself. To do this, we will start with looking at the most used n-grams throughout the Bible. An n-gram is essentially n amount of words in a specific order. This specific order of words is the event we are looking for. When we are looking for n-grams, we are going through the data set and count how many times X event occurs. 
+
+## Unigrams
+
+Unigrams are the simplest version of n-grams, because a unigram is one word. We are looking for the p(x) probability of a word happening. For example, we are looking analyzing the probability of the word "Moses" showing up in the Old Testament or "Jesus" showing up in the New Testament.
+
+To start this analysis, we split our data set into the Old and New Testament.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+old_test_books <- cleaned_bible_data[cleaned_bible_data$X <= 39,]
+new_test_books <- cleaned_bible_data[cleaned_bible_data$X > 40,]
+```
+
+Then, we unnest the words from each book and take out the stop words.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+old_tidy <- old_test_books %>%
+  unnest_tokens(word, book) %>%
+  anti_join(stop_words)
+
+old_count <- old_tidy %>%
+  count(word, sort=TRUE)
+
+old_count$word <- as.factor(old_count$word) 
+```
+
+This plot shows the top 20 unigrams (aka words) used in the Old Testament. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+ggplot(
+  data = head(old_count, 20),
+  aes(x = fct_reorder(word,n), y = n, fill = "#336A98")) + 
+  geom_col(fill = "#336A98") + 
+  coord_flip()+
+  theme_light()+
+  xlab("Token Words")+
+    ylab("Count") + ggtitle("Old Testament")
+```
+
+Now, we will repeat the process for the New Testament. We unnest the words, take out the stop words, and plot the top 20 unigrams used in the New Testament.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+new_tidy <- new_test_books %>%
+  unnest_tokens(word, book)
+
+new_count <- new_tidy %>%
+  count(word, sort=TRUE)
+
+new_count$word <- as.factor(new_count$word) 
+
+ggplot(
+  data = head(new_count, 20),
+  aes(x = fct_reorder(word,n), y = n, fill = "#336A98")) + 
+  geom_col(fill = "#336A98") + 
+  coord_flip()+
+  theme_light()+
+  xlab("Token Words")+
+    ylab("Count") + ggtitle("New Testament")
+```
+
+This brief analysis hints at the differences between the Old Testament and New Testament. While they do share words, especially words like "God", the differentiating most used words are important to help us understand the differences between the two. The Old Testament has words like "David", "Israel", and "Jehovah". The New Testament has words like "Jesus", "spirit", and "Christ". This is telling to the different content of the two testaments. 
+
+## Bigrams
+
+Bigrams is the next version of n-grams, and it looks for the probability of a sequence of two words. We are looking for the p(x1) * (p(x2)|p(x1)) probability of a two-word sequence happening. For example, we are looking analyzing the probability of the word "Moses said" showing up in the Old Testament or "Jesus Christ" showing up in the New Testament. 
+
+A bigram analysis is essential because bigrams take a little more context of the text into the analysis. This is true for any higher n-gram. A unigram of "faith" is much less telling than a 5-gram of "ye who shall have faith". However, the problem with upper level n-gram analysis is that those n-grams have very high dimensionality, and it's difficult to work with. That's why we will cap our analysis at bigrams.
+
+We will repeat the same analysis as before, looking for the top 20 bigrams in both the Old Testament and New Testament.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+old_bigrams <- old_test_books %>%
+  unnest_tokens(word, book, token = "ngrams", n=2)
+
+old_bi_count <- old_bigrams %>%
+  count(word, sort=TRUE)
+
+old_bi_count$word <- as.factor(old_bi_count$word) 
+
+ggplot(
+  data = head(old_bi_count, 20),
+  aes(x = fct_reorder(word, n), y = n, fill = "#336A98")) + 
+  geom_col(fill = "#336A98") + 
+  coord_flip()+
+  theme_light()+
+  xlab("Bigrams")+
+    ylab("Count") + ggtitle("Old Testament")
+
+new_bigrams <- new_test_books %>%
+  unnest_tokens(word, book, token = "ngrams", n=2)
+
+new_bi_count <- new_bigrams %>%
+  count(word, sort=TRUE)
+
+new_bi_count$word <- as.factor(new_bi_count$word) 
+
+ggplot(
+  data = head(new_bi_count, 20),
+  aes(x = fct_reorder(word, n), y = n, fill = "#336A98")) + 
+  geom_col(fill = "#336A98") + 
+  coord_flip()+
+  theme_light()+
+  xlab("Bigrams")+
+    ylab("Count") + ggtitle("New Testament")
+```
+
+# Sentiment Analysis
+
+Next, we want to see if the Old Testament and New Testament have different sentiments. We will conduct sentiment analysis to get a brief look into the positivity or negativity of the word choice within both testaments. 
+
+The first sentiment we will use is called afinn.
+
+**AFINN**
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+old_afinn_sentiment <- old_tidy %>% 
+  inner_join(get_sentiments("afinn")) %>% 
+  group_by(X) %>% 
+  summarise(sentiment = sum(value)) %>% 
+  mutate(method = "AFINN")
+
+ggplot(old_afinn_sentiment, aes(x=X, y=sentiment, fill=sentiment)) + 
+    geom_bar(stat="identity") 
+
+new_afinn_sentiment <- new_tidy %>% 
+  inner_join(get_sentiments("afinn")) %>% 
+  group_by(X) %>% 
+  summarise(sentiment = sum(value)) %>% 
+  mutate(method = "AFINN")
+
+ggplot(new_afinn_sentiment, aes(x=X, y=sentiment, fill=sentiment)) + 
+    geom_bar(stat="identity") 
+```
+
+The next sentiment we will use is called bing.
+
+**BING**
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+old_bing_sentiment <- old_tidy %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(X, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+ggplot(old_bing_sentiment, aes(x=X, y=sentiment, fill=sentiment)) + 
+    geom_bar(stat="identity")
+
+new_bing_sentiment <- new_tidy %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(X, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+ggplot(new_bing_sentiment, aes(x=X, y=sentiment, fill=sentiment)) + 
+    geom_bar(stat="identity")
+```
+
+**Total**
+
+We will create a data frame to compare the average sentiments from our afinn and bing analysis.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+a <- mean(old_afinn_sentiment$sentiment)
+b <- mean(new_afinn_sentiment$sentiment)
+c <- mean(old_bing_sentiment$sentiment)
+d <- mean(new_bing_sentiment$sentiment)
+e <- data.frame("Method" = c("Afinn", "Bing"), "Old Testament" = c(a, c), "New Testament" = c(b,d))
+gt(e)
+```
+
+This is an interest result with the Old Testament having a far more negative overall sentiment than the New Testament. This lines up with an important distinction between the two testaments. In much of Christian faith, God is seen very differently in the Old Testament than in the New Testament. He is seen as a more vengeful and wrathful God in the Old Testament - drowning the whole word, asking his follower to sacrifice his son, and unleashing plagues upon Egypt. In the New Testament, he has the opposite character, being seen as the most loving and forgiveful entity. This distinction is one that's studied a lot in the Christian faith - so it's very interesting to see this principle reflected in our sentiment analysis.
+
+# TF-IDF
+
+Next, we will conduct Term Frequency - Inverse Document Frequency analysis.
+
+This analysis is essential to understanding a piece of text. Essentially, TF-IDF looks for the frequent terms that don't appear in many documents. This is the key piece to understand: it gives more importance to a term that occurs frequency in only a few documents, rather than all of the documents.
+
+For example, consider the word "and". This is a very frequent term - perhaps one of the most frequent words in the Bible. However, the word "and" is frequent in every single book. Because it is so frequent throughout all the books, the word "and" won't be deemed important in this analysis.
+
+On the other hand, consider the word "Job". Job is one of the books of the Bible and one of God's most devout followers. Because it is his book in the Bible, the Book of Job repeats the word Job many times. However - Job is not said much throughout the rest of the Bible. It is only repeated frequently throughout his book. TF-IDF recognizes that because the word "Job" is said frequently in that book, but not said frequently throughout the other books, it must be a key topic within the Book of Job.
+
+TF-IDF creates this numerical analysis for all the words in the Bible, looking how important a word is to a book relative to all the words in the Bible.
+
+Like the previous sections, we split this analysis up by Old and New Testament.
+
+## Old Testament
+
+To start with our TF-IDF analysis for the Old Testament, we want to see the distribution of the words within each book. With this, we want to see how many of the words within each book are deemed important and unimportant. On the x-axis is the TF-IDF score: the higher this number, the more important. On the y-axis is the count of words that received that TF-IDF score. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+old_words <- old_test_books %>%
+  unnest_tokens(word, book) %>%
+  count(X, word, sort = TRUE)
+
+total_old_words <- old_words %>% 
+    group_by(X) %>% 
+    summarize(total = sum(n))
+
+old_words <- left_join(old_words, total_old_words)
+
+old_words <- old_words[order(old_words$X),]
+
+head(old_words)
+
+ggplot(old_words[old_words$X < 9, ], aes(n/total, fill = X)) +
+    geom_histogram(bins = 25 ,show.legend = FALSE) +
+    xlim(NA, 0.0009) +
+    facet_wrap(~X, ncol = 3, scales = "free_y")
+```
+
+These are the first nine books of the Bible. These graphs all show similar results. There are many, many words that have a low TF-IDF score, meaning they are unimportant to understanding the book's contents and topics. These are the words like "and", "the", and probably other commonly used words in the Bible like "love", "faith", etc. As the curve deepens, there are less and less words that have high TF-IDF scores, which indicates that the word is important to understanding the topic of the book.
+
+This distribution is exactly what TF-IDF appears as in all text documents. These very long tails are indicative of Zipf's Law, which is shown below.
+
+Zipf's Law states that there there are a lot of words you don't say very often with low frequencies, and there are very few words said often with high frequencies. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+old_freq_by_rank <- old_words %>% 
+  group_by(X) %>% 
+  mutate(rank = row_number(), 
+         `term frequency` = n/total) %>%
+  ungroup()
+
+head(old_freq_by_rank)
+
+old_freq_by_rank[old_freq_by_rank$X < 9, ] %>% 
+    ggplot(aes(rank, `term frequency`, color = X)) + 
+    geom_line(size = 1.1, alpha = 0.8, show.legend = FALSE) + 
+    scale_x_log10() +
+    scale_y_log10()
+```
+
+This graph follows the exact same curve as Zipf's Law, proving that our analysis is sound. Now that we've confirmed our text follows natural language laws as it should, let's continue forward with our TF-IDF analysis. Let's see which words are most important to a couple of the books in the Old Testament.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+old_tf_idf <- old_words %>%
+  bind_tf_idf(word, X, n)
+
+old_tf_idf <- old_tf_idf %>%
+  select(-total) %>%
+  arrange(desc(tf_idf))
+
+old_tf_idf[old_tf_idf$X == 1, ] %>%
+    group_by(X) %>%
+    slice_max(tf_idf, n = 15) %>%
+    ungroup() %>%
+    ggplot(aes(tf_idf, fct_reorder(word, tf_idf), fill = X)) +
+    geom_col(show.legend = FALSE) +
+    facet_wrap(~X, ncol = 2, scales = "free") +
+    labs(x = "tf-idf", y = NULL)
+```
+
+This shows the words with the highest TF-IDF scores in the book of Exodus. This makes a lot of sense - the book of Exodus is all about Moses and the Egyptians. This gives us a lot of insight into the stories that are contained within the book of Exodus. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+old_tf_idf[old_tf_idf$X == 17, ] %>%
+    group_by(X) %>%
+    slice_max(tf_idf, n = 15) %>%
+    ungroup() %>%
+    ggplot(aes(tf_idf, fct_reorder(word, tf_idf), fill = X)) +
+    geom_col(show.legend = FALSE) +
+    facet_wrap(~X, ncol = 2, scales = "free") +
+    labs(x = "tf-idf", y = NULL)
+```
+
+This shows the words with the highest TF-IDF scores in the book of Job. As I explained earlier, it makes a lot of sense that one of the words with the highest TF-IDF scores in this book is Job. We can also see a bit of insight into the contents of his book - including his temptation with Satan and how he prevailed because of his faith in God.
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+old_tf_idf[old_tf_idf$X == 31, ] %>%
+    group_by(X) %>%
+    slice_max(tf_idf, n = 15) %>%
+    ungroup() %>%
+    ggplot(aes(tf_idf, fct_reorder(word, tf_idf), fill = X)) +
+    geom_col(show.legend = FALSE) +
+    facet_wrap(~X, ncol = 2, scales = "free") +
+    labs(x = "tf-idf", y = NULL)
+```
+
+This shows the words with the highest TF-IDF scores in the book of Jonah. The classic story of Jonah is how he was eaten by a whale, and we can see these words here allude to that famous biblical story. We notice it in words like "belly", "ship", and "fish". This TF-IDF explains the contents of this book of the Bible well.
+
+## New Testament
+
+Now we move onto the New Testament, in which we want to see the distribution of the words within each of the New Testament's book. With this, we want to see how many of the words within each book are deemed important and unimportant. On the x-axis is the TF-IDF score: the higher this number, the more important. On the y-axis is the count of words that received that TF-IDF score. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+new_words <- new_test_books %>%
+  unnest_tokens(word, book) %>%
+  count(X, word, sort = TRUE)
+
+total_new_words <- new_words %>% 
+    group_by(X) %>% 
+    summarize(total = sum(n))
+
+new_words <- left_join(new_words, total_new_words)
+
+new_words <- new_words[order(new_words$X),]
+
+head(new_words)
+
+ggplot(new_words[new_words$X < 50, ], aes(n/total, fill = X)) +
+    geom_histogram(bins = 25 ,show.legend = FALSE) +
+    xlim(NA, 0.009) +
+    facet_wrap(~X, ncol = 3, scales = "free_y")
+```
+
+We see similar results as explained for the TF-IDF graphs in the Old Testament. Despite being a different section of the Bible, this still follows the natural language law of very few words having high TF-IDF scores and many words having low TF-IDF scores for each of the books. 
+
+Let's check that this follows Zipf's Law.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+new_freq_by_rank <- new_words %>% 
+  group_by(X) %>% 
+  mutate(rank = row_number(), 
+         `term frequency` = n/total) %>%
+  ungroup()
+
+head(new_freq_by_rank)
+
+new_freq_by_rank[new_freq_by_rank$X < 50, ] %>% 
+    ggplot(aes(rank, `term frequency`, color = X)) + 
+    geom_line(size = 1.1, alpha = 0.8, show.legend = FALSE) + 
+    scale_x_log10() +
+    scale_y_log10()
+```
+
+
+As expected, this does follow Zipf's Law, illustrating the curve followed by most TF-IDF rankings. Let's move into the TF-IDF analysis for the books of the New Testament.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+new_tf_idf <- new_words %>%
+  bind_tf_idf(word, X, n)
+
+new_tf_idf <- new_tf_idf %>%
+  select(-total) %>%
+  arrange(desc(tf_idf))
+
+new_tf_idf[new_tf_idf$X == 41, ] %>%
+    group_by(X) %>%
+    slice_max(tf_idf, n = 15) %>%
+    ungroup() %>%
+    ggplot(aes(tf_idf, fct_reorder(word, tf_idf), fill = X)) +
+    geom_col(show.legend = FALSE) +
+    facet_wrap(~X, ncol = 2, scales = "free") +
+    labs(x = "tf-idf", y = NULL)
+```
+
+
+This shows the words with the highest TF-IDF scores in the Gospel of Matthew. Words such as "disciples" and "pharisees" and "parable" all allude to this. This Gospel is all about Jesus's life on Earth with his Apostles, so we expect to see words such as these. We would also expect that these words with high TF-IDF scores in the Gospel of Matthew would overlap with the high TF-IDF scores in the other gospels, because they are all retelling the story of Christ's life.
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+new_tf_idf[new_tf_idf$X == 44, ] %>%
+    group_by(X) %>%
+    slice_max(tf_idf, n = 15) %>%
+    ungroup() %>%
+    ggplot(aes(tf_idf, fct_reorder(word, tf_idf), fill = X)) +
+    geom_col(show.legend = FALSE) +
+    facet_wrap(~X, ncol = 2, scales = "free") +
+    labs(x = "tf-idf", y = NULL)
+```
+
+This shows the words with the highest TF-IDF scores in Acts. This book lays down the law of what it means to be Christian. We see words like "law" and "sin", which makes complete sense considering what the book is about. We also see some pretty negative words, too, suggesting the consequences of sinning.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+
+new_tf_idf[new_tf_idf$X == 45, ] %>%
+    group_by(X) %>%
+    slice_max(tf_idf, n = 15) %>%
+    ungroup() %>%
+    ggplot(aes(tf_idf, fct_reorder(word, tf_idf), fill = X)) +
+    geom_col(show.legend = FALSE) +
+    facet_wrap(~X, ncol = 2, scales = "free") +
+    labs(x = "tf-idf", y = NULL)
+```
+
+This shows the words with the highest TF-IDF scores in the Book of Romans. This was written by Paul the Apostle and talks about the salvation offered by Jesus Christ. This analysis is interesting, with words like "tongues" and "spiritual". This makes sense because they talk of "speaking in tongues" in the Book of Romans, which is specific and important to this book.
+
+Overall, TF-IDF analysis is great to identify the topics and words important to each book of the Bible.
+
+# LDA Analysis
+
+We did our LDA analysis using Python. Here is the [link](https://colab.research.google.com/drive/1vQoHSJIZPr0n_n7FHMztFazmGFoq5gNq?usp=sharing#scrollTo=dMTS-OXhGz-O).
+
+# Conclusion
+
+Our methods of analysis included n-gram analysis, sentiment analysis, TF-IDF analysis, and LDA analysis. We ran these on the entire collection of books in order to explore all of our research questions, specifically to identify the differences between the Old and New Testament and the topics within each book of the Bible. 
+
+Our first analysis, n-gram analysis, returned results about the most used unigrams and bigrams for the Old and New Testaments. For the Old Testament, the most used unigrams were "Jehovah", "God", "Israel" and the most used bigrams were "Jehovah God", "children Israel", "saith Jehovah". For the New Testament, the most used unigrams were "God", "said", "Jesus" and the most used bigrams were "Jesus Christ", "Lord Jesus", "Christ Jesus". The difference here is primarily in how they name God. In the Old Testament, they call God by his Hebrew name (used in Judaism). In the New Testament, they discuss God's son and savoir, Jesus Christ. This unigram and bigram analysis shows the largest differentiation between the Old Testament & New Testament - the focus on the Hebrew God and the focus on Jesus Christ. This is the split between Judaism and Christianity, so it is interesting this analysis covers that result.
+
+Through our sentiment analysis, it seemed that the Old Testament was much more negative when compared to the New Testament. This is interesting, too, because of God's different natures in the testaments. In the Old Testament, we see a much wrathful God, who floods the world and is perpetually angry, vs in the New Testament, we see a loving God with infinite forgiveness in his heart. There's a lot of theology resources written about this topic, so it's very interesting that our sentiment analysis picked up on such a discussed part of Christianity. 
+
+We continued our analysis with TF-IDF: Term Frequency - Inverse Document Frequency. This was great at returning the main contexts and topics in each book of the Bible. It was also very helpful in identifying stop-words that did not contribute to the plot. For a quick analysis, this served well to return the most unique & important terms for each one of the Bible's books. It gave us enough context to realize which each book of the Bible was. It also interesting to see what words had crossover high TF-IDF scores. For example, the four Gospels of the Bible (Matthew, Mark, Luke, and John) had similar words on their charts for what the highest TF-IDF terms were.
+
+Finally, our primary method of investigation was LDA analysis. This was good at identifying certain stories within the Bible. However, we found that a lot of the topics weren't specific enough. We think it would be better to run analysis on different types of text (i.e. using data that is more diversified, like sections of a newspaper, different books in the sci-fi genre, Yelp reviews of restaurants in a city). We tried to do LDA on the books within the Bible, but overall the Bible is *one* book that is written in a cohesive fashion. While it is made up of a lot of books, it is more like these books are different chapters of the same volume. This made it difficult for the topic model to find topics. Another one of the many limitations of the LDA model was that the more topics we specified, the more duplicate topics it would return.
+
+# Future Work
+
+There are a lot of different ways we could take this analysis in the future.
+
+Our future research stems from one of the most limiting aspects of our project. As this is a very old texts (obviously dating back centuries), there was a lot of debate and hardship over cleaning this text data. While we chose a version of the Bible with updated, modern text to make this process easier; we found that we still had to use a Middle English stop_words dictionary to clean the data of words like "thou", "shalt", etc. This data cleaning process made us realize how cleaning the text would be a very different process for different versions of the Bible.
+
+This said, we think it would be interesting to replicate this analysis using different translations and versions of the Bible. This is especially interesting because different  Christianities tend to focus on different translations of the Bible, i.e. Catholics use the King James Version and Methodists use the New Revised Standard Version. It would be an interesting analysis to see if there is a statistical difference between the sentiments and topics of different versions of the Bible. This analysis could seek to create conclusions about what topics each sect of Christianity value more. 
+
+Even more, we are interested in comparing the Bible to other important religious texts. We think it could be interesting to compare the overall sentiments and most used words in the Bible with other texts such as Quran, the Torah, the Vedas, etc. It would be interesting to see what words (and possibly topics) overlaps. 
+
+
+
